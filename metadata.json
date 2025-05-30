@@ -1,0 +1,6 @@
+{
+  "name": "pub_バス時刻表アプリ (Bus Timetable App)",
+  "description": "CSVファイルからバスの時刻表をインポートし、表示・検索することができるウェブアプリケーションです。",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

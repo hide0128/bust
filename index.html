@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>バス時刻表アプリ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif; /* A nice sans-serif font often used with Tailwind */
+    }
+    /* Custom scrollbar for webkit browsers */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1e293b; /* slate-800 */
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #475569; /* slate-600 */
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #64748b; /* slate-500 */
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0"
+  }
+}
+</script>
+</head>
+<body class="bg-slate-900">
+  <div id="root"></div>
+  <script type="module">
+    // Import React and ReactDOM
+    import React, { useState, useEffect, useCallback, useRef } from 'react';
+    import ReactDOM from 'react-dom/client';
+
+    // --- START OF types.ts content ---
+    // (Interfaces will be used by JSDoc or understood by context in JS)
+    // interface BusService { routeId: string; stopName: string; dayOfWeek: string; departureTime: string; remarks?: string; originalLineNumber: number; isUpcoming?: boolean; exactTime?: Date; }
+    // interface ParsedTimetableData { services: BusService[]; routeIds: string[]; }
+    // interface TimeComparisonResult { isPast: boolean; isCurrent: boolean; isFuture: boolean; }
+    // interface NextDepartureInfo { stopName: string; departureTime: string; remarks?: string; routeId: string; }
+    // --- END OF types.ts content ---
+
+    // --- START OF components/icons/ ---
+    const BusIcon = (props) => (
+      React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props },
+        React.createElement('path', { d: "M18.92 6.01C18.72 5.42 18.16 5 17.5 5H15V4a1 1 0 00-1-1H6a1 1 0 00-1 1v1H3.5C2.84 5 2.28 5.42 2.08 6.01L1 11v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-1.08-4.99zM6 6h10v3H6V6zm0 5h10v3H6v-3zm11.5 3c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm-9 0c-.83 0-1.5-.67-1.5-1.5S7.67 11 8.5 11s1.5.67 1.5 1.5S9.33 14 8.5 14z" })
+      )
+    );
+
+    const ClockIcon = (props) => (
+      React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props },
+        React.createElement('path', { fillRule: "evenodd", d: "M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zM12 20a8 8 0 100-16 8 8 0 000 16zm-.5-13H12v5.5l-4.5 2.684.716 1.21L13 12.59V7z", clipRule: "evenodd" })
+      )
+    );
+
+    const UploadIcon = (props) => (
+      React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props },
+        React.createElement('path', { d: "M9.984 12.984h4.032v-4.969h2.906l-4.922-4.922-4.922 4.922h2.906v4.969zM18.984 11.016v7.969h-13.969v-7.969h-3.047v9.984h20.063v-9.984h-3.047z" })
+      )
+    );
+
+    const ChevronDownIcon = (props) => (
+      React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 20 20", fill: "currentColor", ...props },
+        React.createElement('path', { fillRule: "evenodd", d: "M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z", clipRule: "evenodd" })
+      )
+    );
+
+    const AlertIcon = (props) => (
+      React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props },
+        React.createElement('path', { fillRule: "evenodd", d: "M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z", clipRule: "evenodd" })
+      )
+    );
+    
+    const MapPinIcon = (props) => (
+      React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", ...props },
+        React.createElement('path', { fillRule: "evenodd", d: "M12 2.25c-3.494 0-6.538 2.446-7.306 5.761.255-.121.52-.232.798-.331A4.503 4.503 0 019.75 3a4.5 4.5 0 014.265 6.016.75.75 0 00.488.488A4.503 4.503 0 0115 13.5a4.5 4.5 0 01-6.016 4.265.75.75 0 00-.488.488 4.503 4.503 0 01-1.497 1.497c-.1.277-.21.543-.33.797C7.462 21.553 10.506 24 12 24c5.138 0 9.75-4.658 9.75-9.75S17.138 2.25 12 2.25zM12.75 9a.75.75 0 00-1.5 0v2.25H9a.75.75 0 000 1.5h2.25V15a.75.75 0 001.5 0v-2.25H15a.75.75 0 000-1.5h-2.25V9z", clipRule: "evenodd" }),
+        React.createElement('path', { d: "M6.06 7.937a4.502 4.502 0 00-2.882 3.813.75.75 0 01-1.44-.466 5.998 5.998 0 013.84-5.03.75.75 0 01.548 1.352A4.48 4.48 0 006.061 7.937zM16.063 14.939a4.502 4.502 0 01-3.813 2.882.75.75 0 00-.332 1.441 5.998 5.998 0 005.03-3.84.75.75 0 00-1.352-.548A4.48 4.48 0 0116.06 14.94z" })
+      )
+    );
+    // --- END OF components/icons/ ---
+
+    // --- START OF services/csvParser.ts content ---
+    const EXPECTED_HOUR_HEADER = '時刻(時)'.toLowerCase();
+    const EXPECTED_DAYOFWEEK_HEADER = '曜日'.toLowerCase();
+    const EXPECTED_MINUTE_HEADER = '時刻(分)'.toLowerCase();
+    const EXPECTED_REMARKS_HEADER = '備考'.toLowerCase();
+    const USER_FRIENDLY_REQUIRED_HEADERS = '時刻(時), 曜日, 時刻(分)';
+
+    const sanitizeFileName = (fileName) => {
+      let name = fileName.replace(/\.csv$/i, '');
+      name = name.replace(/[_-]/g, ' ').trim();
+      return name || "名称未設定ルート";
+    };
+
+    const parseCSV = (csvString, fileName) => {
+      return new Promise((resolve, reject) => {
+        try {
+          const lines = csvString.trim().split(/\r?\n/);
+          if (lines.length < 2) {
+            reject(new Error('CSVファイルにはヘッダー行と少なくとも1つのデータ行が必要です。'));
+            return;
+          }
+
+          const headerLine = lines[0];
+          const headers = headerLine.split(',').map(h => h.trim().toLowerCase());
+          
+          const hourIndex = headers.indexOf(EXPECTED_HOUR_HEADER);
+          const dayOfWeekIndex = headers.indexOf(EXPECTED_DAYOFWEEK_HEADER);
+          const minuteIndex = headers.indexOf(EXPECTED_MINUTE_HEADER);
+          const remarksIndex = headers.indexOf(EXPECTED_REMARKS_HEADER);
+
+          if (hourIndex === -1 || dayOfWeekIndex === -1 || minuteIndex === -1) {
+            const missing = [];
+            if (hourIndex === -1) missing.push('時刻(時)');
+            if (dayOfWeekIndex === -1) missing.push('曜日');
+            if (minuteIndex === -1) missing.push('時刻(分)');
+            reject(new Error(`必須ヘッダーが見つかりません: ${missing.join(', ')}。期待される必須ヘッダー: ${USER_FRIENDLY_REQUIRED_HEADERS}。`));
+            return;
+          }
+          
+          const services = [];
+          const currentRouteId = sanitizeFileName(fileName);
+          const currentStopName = currentRouteId; 
+
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            const values = line.split(',').map(v => v.trim());
+            
+            const hourStr = values[hourIndex];
+            const dayOfWeek = values[dayOfWeekIndex];
+            const minuteStr = values[minuteIndex];
+            const remarks = (remarksIndex !== -1 && values[remarksIndex]) ? values[remarksIndex] : undefined;
+
+            if (!hourStr || !dayOfWeek || !minuteStr ) {
+                console.warn(`行 ${i + 1}: 必須データ（時刻(時), 曜日, 時刻(分)のいずれか）が不足しています。スキップします: "${line}"`);
+                continue;
+            }
+
+            const hour = parseInt(hourStr, 10);
+            const minute = parseInt(minuteStr, 10);
+
+            if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                console.warn(`行 ${i + 1}: 時刻データが無効です (時: "${hourStr}", 分: "${minuteStr}")。'HH:MM' 形式で数値を指定してください。スキップします。`);
+                continue;
+            }
+            
+            const departureTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+            services.push({
+              routeId: currentRouteId,
+              stopName: currentStopName,
+              dayOfWeek,
+              departureTime,
+              remarks: remarks || undefined,
+              originalLineNumber: i + 1,
+            });
+          }
+          
+          if (services.length === 0) {
+            reject(new Error('CSVファイルから有効なバス運行データが読み込めませんでした。データ行の内容と形式を確認してください。'));
+            return;
+          }
+
+          resolve({
+            services,
+            routeIds: [currentRouteId],
+          });
+
+        } catch (error) {
+          console.error('CSV解析エラー:', error);
+          reject(new Error(`CSVファイルの解析中に予期せぬエラーが発生しました: ${error.message}`));
+        }
+      });
+    };
+    // --- END OF services/csvParser.ts content ---
+
+    // --- START OF components/FileUpload.tsx content ---
+    const FileUpload = ({ onFileUploaded }) => {
+      const fileInputRef = useRef(null);
+
+      const handleFileChange = (event) => {
+        const file = event.target.files?.[0];
+        if (file) {
+          onFileUploaded(file); 
+        }
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      };
+
+      return React.createElement('div', { className: "flex flex-col items-center space-y-3" },
+        React.createElement('h2', { className: "text-xl font-semibold text-sky-400" }, "時刻表CSVファイル"),
+        React.createElement('p', { className: "text-sm text-slate-400 text-center" },
+          "ファイル名が路線名/バス停名として扱われます。", React.createElement('br'),
+          "必須ヘッダー: ", React.createElement('code', {className: "bg-slate-700 px-1 rounded"}, "時刻(時)"), ", ", React.createElement('code', {className: "bg-slate-700 px-1 rounded"}, "曜日"), ", ", React.createElement('code', {className: "bg-slate-700 px-1 rounded"}, "時刻(分)"), React.createElement('br'),
+          "任意ヘッダー: ", React.createElement('code', {className: "bg-slate-700 px-1 rounded"}, "備考")
+        ),
+        React.createElement('label', {
+          htmlFor: "csv-upload",
+          className: "cursor-pointer bg-sky-600 hover:bg-sky-500 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-150 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg w-full sm:w-auto"
+        },
+          React.createElement(UploadIcon, { className: "w-5 h-5" }),
+          React.createElement('span', null, "CSVファイルを選択/更新")
+        ),
+        React.createElement('input', {
+          id: "csv-upload",
+          type: "file",
+          accept: ".csv",
+          ref: fileInputRef,
+          onChange: handleFileChange,
+          className: "hidden"
+        })
+      );
+    };
+    // --- END OF components/FileUpload.tsx content ---
+
+    // --- START OF components/FilterControls.tsx content ---
+    const FilterControls = ({
+      routeIds,
+      selectedRoute,
+      onRouteChanged,
+      excludeRemarks,
+      onExcludeRemarksChanged,
+    }) => {
+      const noRoutesAvailable = routeIds.length === 0 || (routeIds.length === 1 && routeIds[0] === 'すべて');
+
+      return React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-4 items-end" },
+        React.createElement('div', null,
+          React.createElement('label', { htmlFor: "route-select", className: "block text-sm font-medium text-slate-300 mb-1" }, "路線フィルター"),
+          React.createElement('div', { className: "relative" },
+            React.createElement('select', {
+              id: "route-select",
+              value: selectedRoute,
+              onChange: (e) => onRouteChanged(e.target.value),
+              className: "w-full bg-slate-700 border border-slate-600 text-gray-200 rounded-lg p-2.5 pr-8 focus:ring-sky-500 focus:border-sky-500 appearance-none",
+              disabled: noRoutesAvailable
+            }, routeIds.map((id) => React.createElement('option', { key: id, value: id }, id))),
+            React.createElement(ChevronDownIcon, { className: "w-5 h-5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" })
+          ),
+          noRoutesAvailable && React.createElement('p', { className: "text-xs text-slate-500 mt-1" }, "利用可能な路線データがありません。")
+        ),
+        React.createElement('div', { className: "flex items-center justify-start md:justify-self-start md:pt-6" },
+          React.createElement('label', { htmlFor: "exclude-remarks-toggle", className: "flex items-center cursor-pointer select-none group" },
+            React.createElement('span', { className: "mr-3 text-sm font-medium text-slate-300 group-hover:text-sky-200 transition-colors" }, "備考ありを除外"),
+            React.createElement('div', { className: "relative" },
+              React.createElement('input', {
+                id: "exclude-remarks-toggle",
+                type: "checkbox",
+                className: "sr-only peer",
+                checked: excludeRemarks,
+                onChange: (e) => onExcludeRemarksChanged(e.target.checked)
+              }),
+              React.createElement('div', { className: "w-11 h-6 bg-slate-600 rounded-full peer-focus:ring-2 peer-focus:ring-offset-2 peer-focus:ring-offset-slate-800 peer-focus:ring-sky-500 peer-checked:bg-sky-500 transition-colors duration-200 ease-in-out" }),
+              React.createElement('div', { className: "absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-5" })
+            )
+          )
+        )
+      );
+    };
+    // --- END OF components/FilterControls.tsx content ---
+
+    // --- START OF components/TimetableDisplay.tsx content ---
+    const getTimeComparison = (timeStr, now) => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const serviceTimeInMinutes = hours * 60 + minutes;
+      const currentTimeInMinutes = now.getHours() * 60 + now.getMinutes();
+      const diff = serviceTimeInMinutes - currentTimeInMinutes;
+      if (diff < 0) return { isPast: true, isCurrent: false, isFuture: false };
+      if (diff >= 0 && diff <= 10) return { isPast: false, isCurrent: true, isFuture: false };
+      return { isPast: false, isCurrent: false, isFuture: true };
+    };
+
+    const TimetableDisplay = ({ services, currentTime }) => {
+      const futureServices = services.filter(service => {
+        const comparison = getTimeComparison(service.departureTime, currentTime);
+        return !comparison.isPast; 
+      });
+
+      if (futureServices.length === 0) {
+        return React.createElement('div', { className: "text-center py-8 text-slate-500" },
+          React.createElement(MapPinIcon, { className: "w-12 h-12 mx-auto mb-3 text-slate-600" }),
+          React.createElement('p', null, "本日の今後の運行情報はありません。"),
+          React.createElement('p', { className: "text-sm" }, "選択された路線または条件で、現在時刻以降に出発するバスはありません。")
+        );
+      }
+
+      const stopsMap = new Map();
+      futureServices.forEach(service => {
+        if (!stopsMap.has(service.stopName)) {
+          stopsMap.set(service.stopName, []);
+        }
+        stopsMap.get(service.stopName).push({ time: service.departureTime, remarks: service.remarks || undefined });
+      });
+
+      stopsMap.forEach((entries, stopName) => {
+        const sortedEntries = entries.sort((a, b) => {
+            const [aH, aM] = a.time.split(':').map(Number);
+            const [bH, bM] = b.time.split(':').map(Number);
+            if (aH !== bH) return aH - bH;
+            return aM - bM;
+        });
+        if (sortedEntries.length === 0) {
+            stopsMap.delete(stopName);
+        } else {
+            stopsMap.set(stopName, sortedEntries);
+        }
+      });
+      
+      const sortedStopNames = Array.from(stopsMap.keys()).sort();
+
+      if (sortedStopNames.length === 0) {
+         return React.createElement('div', { className: "text-center py-8 text-slate-500" },
+          React.createElement(MapPinIcon, { className: "w-12 h-12 mx-auto mb-3 text-slate-600" }),
+          React.createElement('p', null, "本日の今後の運行情報はありません。"),
+          React.createElement('p', { className: "text-sm" }, "すべてのバス停で本日の運行は終了したか、該当するデータがありません。")
+        );
+      }
+
+      return React.createElement('div', { className: "space-y-6" },
+        sortedStopNames.map((stopName) => {
+          const entriesForStop = stopsMap.get(stopName);
+          if (entriesForStop.length === 0) return null;
+
+          const displayedEntries = entriesForStop.slice(0, 2);
+
+          return React.createElement('div', { key: stopName, className: "bg-slate-700/[.5] p-4 rounded-lg shadow-md" },
+            React.createElement('h3', { className: "text-xl font-semibold text-sky-300 mb-3 flex items-center" },
+              React.createElement(MapPinIcon, { className: "w-6 h-6 mr-2 text-sky-400" }),
+              stopName
+            ),
+            React.createElement('div', { className: "grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-2.5" },
+              displayedEntries.map((entry, index) => {
+                const timeClass = 'bg-sky-600 hover:bg-sky-500 text-white';
+                let titleText = `出発時刻: ${entry.time}`;
+                if (entry.remarks) {
+                  titleText += `\n備考: ${entry.remarks}`;
+                }
+                return React.createElement('div', {
+                  key: `${stopName}-${entry.time}-${entry.remarks || 'no-remarks'}-${index}`,
+                  className: `p-2.5 rounded text-center text-sm font-medium transition-colors duration-150 flex flex-col justify-center items-center shadow-sm ${timeClass}`,
+                  title: titleText
+                },
+                  React.createElement('div', { className: "flex items-center" },
+                    React.createElement(ClockIcon, { className: "w-3.5 h-3.5 inline mr-1.5 opacity-80" }),
+                    React.createElement('span', { className: "text-base" }, entry.time)
+                  ),
+                  entry.remarks && React.createElement('div', { className: "text-xs mt-1 opacity-90 truncate w-full px-1" }, entry.remarks)
+                );
+              })
+            )
+          );
+        })
+      );
+    };
+    // --- END OF components/TimetableDisplay.tsx content ---
+
+    // --- START OF components/CountdownTimer.tsx content ---
+    const CountdownTimer = ({ nextDeparture, currentTime }) => {
+      const [timeLeft, setTimeLeft] = useState('');
+
+      useEffect(() => {
+        if (!nextDeparture) {
+          setTimeLeft('');
+          return;
+        }
+
+        const calculateTimeLeft = () => {
+          const [hours, minutes] = nextDeparture.departureTime.split(':').map(Number);
+          const departureDateTime = new Date(currentTime);
+          departureDateTime.setHours(hours, minutes, 0, 0);
+
+          const difference = departureDateTime.getTime() - currentTime.getTime();
+
+          if (difference <= 0) {
+            setTimeLeft('発車しました');
+            return;
+          }
+
+          const totalSeconds = Math.floor(difference / 1000);
+          const dHours = Math.floor(totalSeconds / 3600);
+          const dMinutes = Math.floor((totalSeconds % 3600) / 60);
+          const dSeconds = totalSeconds % 60;
+          
+          let countdownString = '';
+          if (dHours > 0) countdownString += `${dHours}時間`;
+          countdownString += `${String(dMinutes).padStart(dHours > 0 ? 2 : 1, '0')}分${String(dSeconds).padStart(2, '0')}秒`;
+          
+          setTimeLeft(countdownString);
+        };
+
+        calculateTimeLeft();
+      }, [nextDeparture, currentTime]);
+
+      if (!nextDeparture) {
+        return React.createElement('div', { className: "text-center py-3 px-4 bg-slate-700/[.6] rounded-lg shadow" },
+          React.createElement('p', { className: "text-slate-300" }, "本日の今後の運行予定はありません。")
+        );
+      }
+      
+      const isDeparted = timeLeft === '発車しました';
+
+      return React.createElement('div', { className: `p-4 rounded-lg shadow-lg text-center ${isDeparted ? 'bg-slate-600' : 'bg-sky-700/[.8]'}` },
+        React.createElement('div', { className: "flex items-center justify-center text-sky-200 mb-1 text-sm" },
+          React.createElement(MapPinIcon, { className: "w-5 h-5 mr-2 opacity-80" }),
+          React.createElement('span', null, `次のバス (路線: ${nextDeparture.routeId})`)
+        ),
+        React.createElement('h3', { className: "text-xl font-semibold text-white" },
+          nextDeparture.stopName, " ", React.createElement('span', { className: "font-mono" }, nextDeparture.departureTime), " 発"
+        ),
+        nextDeparture.remarks && React.createElement('p', { className: "text-sm text-sky-300 mt-1" }, `備考: ${nextDeparture.remarks}`),
+        React.createElement('div', { className: "mt-2 text-2xl font-bold text-white flex items-center justify-center" },
+          React.createElement(ClockIcon, { className: "w-7 h-7 mr-2 animate-pulse" }),
+          isDeparted ? React.createElement('span', {className: "text-yellow-400"}, timeLeft) : React.createElement('span', null, `あと ${timeLeft}`)
+        )
+      );
+    };
+    // --- END OF components/CountdownTimer.tsx content ---
+
+    // --- START OF App.tsx content ---
+    const LOCAL_STORAGE_TIMETABLE_KEY = 'busTimetableApp_timetableData';
+    const LOCAL_STORAGE_ROUTE_KEY = 'busTimetableApp_selectedRoute';
+    const LOCAL_STORAGE_EXCLUDE_REMARKS_KEY = 'busTimetableApp_excludeRemarks';
+
+    const getDayTypeForFiltering = (date) => {
+      const day = date.getDay();
+      switch (day) {
+        case 0: return "日祝";
+        case 6: return "土曜日";
+        default: return "平日";
+      }
+    };
+
+    const App = () => {
+      const [timetableData, setTimetableData] = useState(null);
+      const [filteredServices, setFilteredServices] = useState([]);
+      const [selectedRoute, setSelectedRoute] = useState('すべて');
+      const [excludeRemarks, setExcludeRemarks] = useState(false);
+      const [currentTime, setCurrentTime] = useState(new Date());
+      const [error, setError] = useState(null);
+      const [isLoading, setIsLoading] = useState(false);
+      const [nextDepartureInfos, setNextDepartureInfos] = useState([]);
+
+      useEffect(() => {
+        try {
+          const storedTimetableData = localStorage.getItem(LOCAL_STORAGE_TIMETABLE_KEY);
+          if (storedTimetableData) {
+            const parsedData = JSON.parse(storedTimetableData);
+            setTimetableData(parsedData);
+            const storedRoute = localStorage.getItem(LOCAL_STORAGE_ROUTE_KEY);
+            if (storedRoute && (storedRoute === 'すべて' || parsedData.routeIds.includes(storedRoute))) {
+              setSelectedRoute(storedRoute);
+            } else {
+              setSelectedRoute('すべて');
+            }
+          } else {
+            setSelectedRoute('すべて');
+          }
+          const storedExcludeRemarks = localStorage.getItem(LOCAL_STORAGE_EXCLUDE_REMARKS_KEY);
+          if (storedExcludeRemarks) {
+            setExcludeRemarks(JSON.parse(storedExcludeRemarks));
+          }
+        } catch (e) {
+          console.error("Failed to load data from localStorage:", e);
+          localStorage.removeItem(LOCAL_STORAGE_TIMETABLE_KEY);
+          localStorage.removeItem(LOCAL_STORAGE_ROUTE_KEY);
+          localStorage.removeItem(LOCAL_STORAGE_EXCLUDE_REMARKS_KEY);
+          setSelectedRoute('すべて');
+          setTimetableData(null);
+        }
+      }, []);
+
+      useEffect(() => {
+        const timerId = setInterval(() => {
+          setCurrentTime(new Date());
+        }, 1000);
+        return () => clearInterval(timerId);
+      }, []);
+
+      const handleFileUploaded = useCallback(async (file) => {
+        setIsLoading(true);
+        setError(null);
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const csvString = e.target?.result;
+            if (!csvString) {
+              throw new Error("ファイルの内容を読み取れませんでした。");
+            }
+            const parsedDataFromNewFile = await parseCSV(csvString, file.name);
+            
+            const existingServices = timetableData?.services || [];
+            const existingRouteIds = timetableData?.routeIds || [];
+
+            const servicesToKeep = existingServices.filter(
+              service => !parsedDataFromNewFile.routeIds.includes(service.routeId)
+            );
+
+            const updatedServices = [...servicesToKeep, ...parsedDataFromNewFile.services];
+            const updatedRouteIds = Array.from(new Set([...existingRouteIds, ...parsedDataFromNewFile.routeIds])).sort();
+
+            const newCombinedData = {
+              services: updatedServices,
+              routeIds: updatedRouteIds,
+            };
+            
+            setTimetableData(newCombinedData);
+            localStorage.setItem(LOCAL_STORAGE_TIMETABLE_KEY, JSON.stringify(newCombinedData));
+
+            let newSelectedRoute = 'すべて';
+            if (selectedRoute && selectedRoute !== 'すべて' && newCombinedData.routeIds.includes(selectedRoute)) {
+              newSelectedRoute = selectedRoute;
+            }
+            
+            setSelectedRoute(newSelectedRoute);
+            localStorage.setItem(LOCAL_STORAGE_ROUTE_KEY, newSelectedRoute);
+
+          } catch (err) {
+            setError(err.message || 'CSVファイルの解析中にエラーが発生しました。');
+          } finally {
+            setIsLoading(false);
+          }
+        };
+        reader.onerror = () => {
+          setError('ファイルの読み込みに失敗しました。');
+          setIsLoading(false);
+        };
+        reader.readAsText(file, 'UTF-8');
+      }, [timetableData, selectedRoute]);
+
+      useEffect(() => {
+        if (!timetableData) {
+          setFilteredServices([]);
+          setNextDepartureInfos([]);
+          return;
+        }
+
+        const currentDayType = getDayTypeForFiltering(currentTime);
+        let baseFilteredServices = timetableData.services.filter(s => s.dayOfWeek === currentDayType);
+        if (excludeRemarks) {
+          baseFilteredServices = baseFilteredServices.filter(s => !s.remarks || s.remarks.trim() === '');
+        }
+
+        let servicesForCountdown;
+        if (selectedRoute && selectedRoute !== 'すべて') {
+          servicesForCountdown = baseFilteredServices.filter(s => s.routeId === selectedRoute);
+        } else {
+          servicesForCountdown = [...baseFilteredServices];
+        }
+        
+        const futureServicesForCountdown = servicesForCountdown
+          .map(s => {
+            const [hours, minutes] = s.departureTime.split(':').map(Number);
+            const serviceDate = new Date(currentTime);
+            serviceDate.setHours(hours, minutes, 0, 0);
+            return { ...s, exactTime: serviceDate };
+          })
+          .filter(s => s.exactTime.getTime() >= currentTime.getTime())
+          .sort((a, b) => a.exactTime.getTime() - b.exactTime.getTime());
+
+        let calculatedDeparturesToShow = [];
+        if (futureServicesForCountdown.length > 0) {
+          if (selectedRoute && selectedRoute !== 'すべて') {
+            const nextBus = futureServicesForCountdown[0];
+            calculatedDeparturesToShow.push({
+              stopName: nextBus.stopName,
+              departureTime: nextBus.departureTime,
+              remarks: nextBus.remarks,
+              routeId: nextBus.routeId,
+            });
+          } else {
+            const distinctDepartures = [];
+            const seenRouteIds = new Set();
+            for (const nextBus of futureServicesForCountdown) {
+              if (distinctDepartures.length >= 2) break;
+              if (!seenRouteIds.has(nextBus.routeId)) {
+                distinctDepartures.push({
+                  stopName: nextBus.stopName,
+                  departureTime: nextBus.departureTime,
+                  remarks: nextBus.remarks,
+                  routeId: nextBus.routeId,
+                });
+                seenRouteIds.add(nextBus.routeId);
+              }
+            }
+            calculatedDeparturesToShow = distinctDepartures;
+          }
+        }
+        setNextDepartureInfos(calculatedDeparturesToShow);
+        
+        let servicesForDisplay;
+        if (selectedRoute && selectedRoute !== 'すべて') {
+          servicesForDisplay = baseFilteredServices.filter(s => s.routeId === selectedRoute);
+        } else {
+          servicesForDisplay = [...baseFilteredServices];
+        }
+        setFilteredServices(servicesForDisplay);
+
+        if (timetableData) { 
+            localStorage.setItem(LOCAL_STORAGE_ROUTE_KEY, selectedRoute);
+        }
+        localStorage.setItem(LOCAL_STORAGE_EXCLUDE_REMARKS_KEY, JSON.stringify(excludeRemarks));
+
+      }, [timetableData, selectedRoute, currentTime, excludeRemarks]);
+
+      const routeOptions = timetableData?.routeIds ? ['すべて', ...timetableData.routeIds] : ['すべて'];
+      
+      const clearTimetableData = () => {
+        setTimetableData(null);
+        setSelectedRoute('すべて');
+        setFilteredServices([]);
+        setNextDepartureInfos([]);
+        setError(null);
+        localStorage.removeItem(LOCAL_STORAGE_TIMETABLE_KEY);
+        localStorage.setItem(LOCAL_STORAGE_ROUTE_KEY, 'すべて');
+      }
+      
+      const headerContent = timetableData && timetableData.services.length > 0 ?
+        React.createElement(React.Fragment, null,
+            React.createElement('p', { className: "text-slate-400 mt-2" }, "現在の時刻表は以下の通りです。別の路線を追加したり、既存の路線を更新するには、CSVファイルをアップロードしてください。"),
+            React.createElement('p', { className: "text-xs text-slate-500 mt-1" }, "ファイル名が路線名/バス停名として扱われます。")
+        ) :
+        React.createElement(React.Fragment, null,
+            React.createElement('p', { className: "text-slate-400 mt-2" }, "CSVファイルをアップロードして、今日のバスの時刻表を確認しましょう。"),
+            React.createElement('p', { className: "text-xs text-slate-500 mt-1" }, "期待されるCSV形式 (ヘッダー行を含む):", React.createElement('br'), React.createElement('code', {className:"text-slate-400"}, "時刻(時),曜日,時刻(分)"), " (必須)", React.createElement('br'), React.createElement('code', {className:"text-slate-400"}, "備考"), " (任意)")
+        );
+
+
+      return React.createElement('div', { className: "min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-gray-100 p-4 sm:p-8 flex flex-col items-center" },
+        React.createElement('header', { className: "w-full max-w-4xl mb-6 text-center" },
+          React.createElement('div', { className: "flex items-center justify-center space-x-3" },
+            React.createElement(BusIcon, { className: "w-12 h-12 text-sky-400" }),
+            React.createElement('h1', { className: "text-4xl font-bold text-sky-400" }, "バス時刻表アプリ")
+          ),
+          headerContent
+        ),
+        React.createElement('main', { className: "w-full max-w-4xl space-y-6" },
+          isLoading && React.createElement('div', { className: "flex justify-center items-center p-6 bg-slate-800/[.7] backdrop-blur-md shadow-2xl rounded-xl" },
+            React.createElement('div', { className: "animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500" }),
+            React.createElement('p', { className: "ml-4 text-lg text-sky-400" }, "データを読み込んでいます...")
+          ),
+          error && React.createElement('div', { className: "bg-red-800/[.7] border border-red-700 text-red-100 px-4 py-3 rounded-xl shadow-lg relative flex items-center", role: "alert" },
+            React.createElement(AlertIcon, { className: "w-6 h-6 mr-3 text-red-300" }),
+            React.createElement('div', null,
+              React.createElement('strong', { className: "font-bold" }, "エラー:"),
+              React.createElement('span', { className: "block sm:inline ml-1" }, error)
+            ),
+            React.createElement('button', { onClick: () => setError(null), className: "absolute top-0 bottom-0 right-0 px-4 py-3 text-red-300 hover:text-red-100" },
+              React.createElement('svg', { className: "fill-current h-6 w-6", role: "button", xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 20 20" }, React.createElement('title', null, "閉じる"), React.createElement('path', { d: "M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z" }))
+            )
+          ),
+          timetableData && timetableData.services.length > 0 && !isLoading && !error && React.createElement('div', { className: "bg-slate-800/[.7] backdrop-blur-md shadow-2xl rounded-xl p-6 space-y-6" },
+            nextDepartureInfos.map((departure, index) => React.createElement(CountdownTimer, {
+                key: `${departure.routeId}-${departure.stopName}-${departure.departureTime}-${index}`,
+                nextDeparture: departure,
+                currentTime: currentTime
+            })),
+            React.createElement(FilterControls, {
+              routeIds: routeOptions,
+              selectedRoute: selectedRoute,
+              onRouteChanged: setSelectedRoute,
+              excludeRemarks: excludeRemarks,
+              onExcludeRemarksChanged: setExcludeRemarks
+            }),
+            React.createElement('div', {className: "flex items-center justify-between text-sm text-slate-400 pt-2 border-t border-slate-700"},
+              React.createElement('span', {className: "font-semibold"}, `本日の曜日: ${getDayTypeForFiltering(currentTime)}`),
+              React.createElement('div', {className: "flex items-center"},
+                React.createElement(ClockIcon, {className: "w-5 h-5 mr-2 text-sky-400"}),
+                React.createElement('span', null, `現在時刻: ${currentTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`)
+              )
+            ),
+            React.createElement(TimetableDisplay, { services: filteredServices, currentTime: currentTime })
+          ),
+          (!timetableData || timetableData.services.length === 0) && !isLoading && !error && React.createElement('div', { className: "text-center text-slate-500 py-10 bg-slate-800/[.7] backdrop-blur-md shadow-2xl rounded-xl p-6" },
+            React.createElement(BusIcon, { className: "w-16 h-16 mx-auto mb-4 text-slate-600" }),
+            React.createElement('p', { className: "text-xl" }, "時刻表データが読み込まれていません。"),
+            React.createElement('p', null, "CSVファイルをアップロードして開始してください。")
+          ),
+          React.createElement('div', { className: "bg-slate-800/[.7] backdrop-blur-md shadow-2xl rounded-xl p-6" },
+            React.createElement(FileUpload, { onFileUploaded: handleFileUploaded }),
+            timetableData && timetableData.services.length > 0 && React.createElement('button', {
+              onClick: clearTimetableData,
+              className: "mt-4 w-full text-sm bg-red-700 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-150"
+            }, "時刻表データをすべてクリア")
+          )
+        ),
+        React.createElement('footer', { className: "w-full max-w-4xl mt-12 text-center text-sm text-slate-500" },
+          React.createElement('p', null, `© ${new Date().getFullYear()} バス時刻表アプリ. All rights reserved.`)
+        )
+      );
+    };
+    // --- END OF App.tsx content ---
+
+    // --- START OF index.tsx content ---
+    const rootElement = document.getElementById('root');
+    if (!rootElement) {
+      throw new Error("ルート要素が見つかりませんでした。");
+    }
+
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      React.createElement(React.StrictMode, null, 
+        React.createElement(App, null)
+      )
+    );
+    // --- END OF index.tsx content ---
+  </script>
+</body>
+</html>
+<link rel="stylesheet" href="index.css">
+<script src="index.tsx" type="module"></script>
