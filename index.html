@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -114,6 +115,11 @@
           const headerLine = lines[0];
           const headers = headerLine.split(',').map(h => h.trim().toLowerCase());
           
+          // Remove BOM from the first header if present
+          if (headers.length > 0 && headers[0].startsWith('\ufeff')) {
+            headers[0] = headers[0].substring(1);
+          }
+          
           const hourIndex = headers.indexOf(EXPECTED_HOUR_HEADER);
           const dayOfWeekIndex = headers.indexOf(EXPECTED_DAYOFWEEK_HEADER);
           const minuteIndex = headers.indexOf(EXPECTED_MINUTE_HEADER);
@@ -132,11 +138,21 @@
           const currentRouteId = sanitizeFileName(fileName);
           const currentStopName = currentRouteId; 
 
+          let highestRequiredIndex = Math.max(hourIndex, dayOfWeekIndex, minuteIndex);
+          if (remarksIndex !== -1) {
+            highestRequiredIndex = Math.max(highestRequiredIndex, remarksIndex);
+          }
+
           for (let i = 1; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
 
             const values = line.split(',').map(v => v.trim());
+            
+            if (values.length <= highestRequiredIndex) {
+                console.warn(`行 ${i + 1}: 列の数が不足しています。少なくとも ${highestRequiredIndex + 1} 列必要ですが、${values.length} 列しかありません。スキップします: "${line}"`);
+                continue;
+            }
             
             const hourStr = values[hourIndex];
             const dayOfWeek = values[dayOfWeekIndex];
@@ -437,7 +453,7 @@
       const day = date.getDay();
       switch (day) {
         case 0: return "日祝";
-        case 6: return "土曜日";
+        case 6: return "土曜"; // Changed from "土曜日"
         default: return "平日";
       }
     };
@@ -719,5 +735,3 @@
   </script>
 </body>
 </html>
-<link rel="stylesheet" href="index.css">
-<script src="index.tsx" type="module"></script>
